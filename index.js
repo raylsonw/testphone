@@ -137,6 +137,15 @@ const RayoWearPurchase = mongoose.model('RayoWearPurchase', new mongoose.Schema(
     username: String, itemId: String, date: { type: Date, default: Date.now }
 }));
 
+// SOCIAL GROUPS SCHEMA
+const Group = mongoose.model('Group', new mongoose.Schema({
+    id: { type: String, unique: true }, // group_TIMESTAMP_RANDOM
+    name: String,
+    members: [String], // Array of User IDs
+    image: { type: String, default: "https://i.imgur.com/a4AWfCY.png" },
+    createdAt: { type: Date, default: Date.now }
+}));
+
 // ... (skipping unchanged lines) ...
 
 app.get('/admin/officials', async (req, res) => {
@@ -253,6 +262,37 @@ app.post('/rayowear/item', async (req, res) => {
         await RayoWearItem.create({ id: Date.now().toString(), ...payload });
     }
     res.json({ success: true });
+});
+
+// --- SOCIAL GROUPS ROUTES ---
+app.post('/groups', async (req, res) => {
+    try {
+        const { id, name, members, image } = req.body;
+        if (!id || !name || !members) return res.status(400).json({ error: "Missing fields" });
+
+        // Upsert Group
+        await Group.findOneAndUpdate(
+            { id: id },
+            { name, members, image: image || "https://i.imgur.com/a4AWfCY.png" },
+            { upsert: true, new: true }
+        );
+        console.log(`[Groups] Group Synced: ${name} (${id})`);
+        res.json({ success: true });
+    } catch (e) {
+        console.error("Group Sync Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/groups/user/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        // Find groups where members array contains userId
+        const groups = await Group.find({ members: userId });
+        res.json(groups);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.post('/rayowear/buy', async (req, res) => {
