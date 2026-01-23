@@ -291,15 +291,25 @@ app.post('/groups', async (req, res) => {
 
 app.post('/groups/kick', async (req, res) => {
     try {
-        const { groupId, userId } = req.body;
-        // Verify owner logic could be here if we passed requester ID. For now trust client.
+        const { groupId, userId, requesterId } = req.body;
         if (!groupId || !userId) return res.status(400).json({ error: "Missing fields" });
+
+        const group = await Group.findOne({ id: groupId });
+        if (!group) return res.status(404).json({ error: "Group not found" });
+
+        // SECURITY CHECK
+        if (group.owner) {
+            if (!requesterId || requesterId.toString() !== group.owner.toString()) {
+                console.warn(`[Security] Kick blocked. Requester=${requesterId} Owner=${group.owner}`);
+                return res.status(403).json({ error: "Only Admin can kick" });
+            }
+        }
 
         await Group.updateOne(
             { id: groupId },
             { $pull: { members: userId } }
         );
-        console.log(`[Groups] User ${userId} KICKED from ${groupId}`);
+        console.log(`[Groups] User ${userId} KICKED from ${groupId} (by ${requesterId || 'Unknown'})`);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -308,18 +318,26 @@ app.post('/groups/kick', async (req, res) => {
 
 app.post('/groups/add', async (req, res) => {
     try {
-        const { groupId, userId } = req.body;
+        const { groupId, userId, requesterId } = req.body;
         if (!groupId || !userId) return res.status(400).json({ error: "Missing fields" });
 
         const group = await Group.findOne({ id: groupId });
         if (!group) return res.status(404).json({ error: "Group not found" });
+
+        // SECURITY CHECK
+        if (group.owner) {
+            if (!requesterId || requesterId.toString() !== group.owner.toString()) {
+                console.warn(`[Security] Add blocked. Requester=${requesterId} Owner=${group.owner}`);
+                return res.status(403).json({ error: "Only Admin can add" });
+            }
+        }
 
         if (group.members.length >= 10) return res.status(400).json({ error: "Group full" });
         if (group.members.includes(userId)) return res.json({ success: true }); // Already matched
 
         group.members.push(userId);
         await group.save();
-        console.log(`[Groups] User ${userId} ADDED to ${groupId}`);
+        console.log(`[Groups] User ${userId} ADDED to ${groupId} (by ${requesterId || 'Unknown'})`);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
