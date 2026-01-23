@@ -284,6 +284,22 @@ app.post('/groups', async (req, res) => {
     }
 });
 
+app.post('/groups/leave', async (req, res) => {
+    try {
+        const { groupId, userId } = req.body;
+        if (!groupId || !userId) return res.status(400).json({ error: "Missing fields" });
+
+        await Group.updateOne(
+            { id: groupId },
+            { $pull: { members: userId } }
+        );
+        console.log(`[Groups] Member ${userId} left ${groupId}`);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/groups/user/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
