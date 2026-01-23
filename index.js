@@ -141,6 +141,7 @@ const RayoWearPurchase = mongoose.model('RayoWearPurchase', new mongoose.Schema(
 const Group = mongoose.model('Group', new mongoose.Schema({
     id: { type: String, unique: true }, // group_TIMESTAMP_RANDOM
     name: String,
+    owner: String, // User ID of the creator/admin
     members: [String], // Array of User IDs
     image: { type: String, default: "https://i.imgur.com/a4AWfCY.png" },
     createdAt: { type: Date, default: Date.now }
@@ -267,19 +268,60 @@ app.post('/rayowear/item', async (req, res) => {
 // --- SOCIAL GROUPS ROUTES ---
 app.post('/groups', async (req, res) => {
     try {
-        const { id, name, members, image } = req.body;
+        const { id, name, members, image, owner } = req.body;
         if (!id || !name || !members) return res.status(400).json({ error: "Missing fields" });
+
+        // Build Payload
+        const payload = { name, members, image: image || "https://i.imgur.com/a4AWfCY.png" };
+        if (owner) payload.owner = owner;
 
         // Upsert Group
         await Group.findOneAndUpdate(
             { id: id },
-            { name, members, image: image || "https://i.imgur.com/a4AWfCY.png" },
+            payload,
             { upsert: true, new: true }
         );
         console.log(`[Groups] Group Synced: ${name} (${id})`);
         res.json({ success: true });
     } catch (e) {
         console.error("Group Sync Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/groups/kick', async (req, res) => {
+    try {
+        const { groupId, userId } = req.body;
+        // Verify owner logic could be here if we passed requester ID. For now trust client.
+        if (!groupId || !userId) return res.status(400).json({ error: "Missing fields" });
+
+        await Group.updateOne(
+            { id: groupId },
+            { $pull: { members: userId } }
+        );
+        console.log(`[Groups] User ${userId} KICKED from ${groupId}`);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/groups/add', async (req, res) => {
+    try {
+        const { groupId, userId } = req.body;
+        if (!groupId || !userId) return res.status(400).json({ error: "Missing fields" });
+
+        const group = await Group.findOne({ id: groupId });
+        if (!group) return res.status(404).json({ error: "Group not found" });
+
+        if (group.members.length >= 10) return res.status(400).json({ error: "Group full" });
+        if (group.members.includes(userId)) return res.json({ success: true }); // Already matched
+
+        group.members.push(userId);
+        await group.save();
+        console.log(`[Groups] User ${userId} ADDED to ${groupId}`);
+        res.json({ success: true });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
