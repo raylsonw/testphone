@@ -778,10 +778,13 @@ app.get('/officials', async (req, res) => { const o = await OfficialAccount.find
 
 // --- ONLINE USER SYSTEM (HEARTBEAT) ---
 app.post('/ping', (req, res) => {
-    // Light endpoint: Just update timestamp
-    const { user } = req.body;
+    // Light endpoint: Update timestamp AND store figure
+    const { user, figure } = req.body;
     if (user) {
-        ONLINE_USERS.set(user, Date.now());
+        ONLINE_USERS.set(user, {
+            timestamp: Date.now(),
+            figure: figure || ""
+        });
     }
     res.sendStatus(200);
 });
@@ -789,25 +792,27 @@ app.post('/ping', (req, res) => {
 app.get('/admin/online-count', (req, res) => {
     // Public or Admin-only? Requirement implies checking from admin panel.
     // If strict admin, verify header. For now, public stats is low risk.
-    // But let's check header if possible, or leave open if index.html is static.
-    // Given the context, we'll leave it open or check rayolife key.
-    // Checking key for safety.
-    // if (req.headers['x-admin-secret'] !== KEYS.rayolife) ... (Optional)
 
     const now = Date.now();
     const threshold = now - 60000; // 1 minute
     let count = 0;
+    const usersList = [];
 
-    // Prune and Count
-    for (const [user, lastSeen] of ONLINE_USERS.entries()) {
+    // Prune and Collect
+    for (const [user, data] of ONLINE_USERS.entries()) {
+        // Handle legacy data (if value is just number) or new object
+        const lastSeen = (typeof data === 'number') ? data : data.timestamp;
+        const figure = (typeof data === 'object') ? data.figure : "";
+
         if (lastSeen > threshold) {
             count++;
+            usersList.push({ name: user, figure: figure, lastSeen: lastSeen });
         } else {
             ONLINE_USERS.delete(user); // Cleanup
         }
     }
 
-    res.json({ count });
+    res.json({ count, users: usersList });
 });
 
 // --- SORTEIOS ROUTES ---
