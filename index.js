@@ -915,7 +915,7 @@ app.get('/admin/sorteio/participants', (req, res) => {
     // It used `u.look`? Wait, admin panel uses "figure" or "look"?
     // Checking `sorteios.html`... It mapped `u` directly. It probably expects strings.
     // If I return simple strings, `u.look` is undefined.
-    // I should upgrade this to return objects { name, look}
+    // I should upgrade this to return obbjects { name, look}
 
     const list = Array.from(SORTEIO.participants.entries()).map(([name, figure]) => ({ name, look: figure }));
     res.json({ list: list });
