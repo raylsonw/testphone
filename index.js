@@ -923,4 +923,4 @@ app.get('/admin/sorteio/participants', (req, res) => {
     res.json({ list: list });
 });
 
-app.listen(PORT, () => console.log(`🔥 Server v28 (Ban Guard) rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🔥 Server v28(Ban Guard) rodando na porta ${PORT}`));
