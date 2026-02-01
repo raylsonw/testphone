@@ -799,15 +799,17 @@ app.get('/admin/online-count', (req, res) => {
     let count = 0;
 
     // Prune and Count
+    const activeUsers = [];
     for (const [user, lastSeen] of ONLINE_USERS.entries()) {
         if (lastSeen > threshold) {
             count++;
+            activeUsers.push(user);
         } else {
             ONLINE_USERS.delete(user); // Cleanup
         }
     }
 
-    res.json({ count });
+    res.json({ count, users: activeUsers });
 });
 
 // --- SORTEIOS ROUTES ---
