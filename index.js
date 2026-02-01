@@ -809,7 +809,7 @@ app.get('/admin/online-count', (req, res) => {
         }
     }
 
-    res.json({ count, users: activeUsers });
+    res.json({ count, users: activeUsers, v: 2 });
 });
 
 // --- SORTEIOS ROUTES ---
