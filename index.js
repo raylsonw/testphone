@@ -799,17 +799,15 @@ app.get('/admin/online-count', (req, res) => {
     let count = 0;
 
     // Prune and Count
-    const activeUsers = [];
     for (const [user, lastSeen] of ONLINE_USERS.entries()) {
         if (lastSeen > threshold) {
             count++;
-            activeUsers.push(user);
         } else {
             ONLINE_USERS.delete(user); // Cleanup
         }
     }
 
-    res.json({ count, users: activeUsers, v: 2 });
+    res.json({ count });
 });
 
 // --- SORTEIOS ROUTES ---
@@ -923,4 +921,4 @@ app.get('/admin/sorteio/participants', (req, res) => {
     res.json({ list: list });
 });
 
-app.listen(PORT, () => console.log(`🔥 Server v28(Ban Guard) rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🔥 Server v28 (Ban Guard) rodando na porta ${PORT}`));
