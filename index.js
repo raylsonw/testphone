@@ -150,7 +150,7 @@ const Group = mongoose.model('Group', new mongoose.Schema({
 const UserSettings = mongoose.model('UserSettings', new mongoose.Schema({
     user: { type: String, unique: true },
     mutedUsers: { type: [String], default: [] },
-    followedUsers: { type: [String], default: [] }
+    following: { type: [String], default: [] }
 }));
 
 // ... (skipping unchanged lines) ...
@@ -441,40 +441,46 @@ app.get('/settings/:user', verifyToken, async (req, res) => {
         // Verify identity
         if (req.authUser !== user) return res.status(403).json({ error: "Acesso negado" });
 
-        const settings = await UserSettings.findOne({ user }) || { mutedUsers: [], followedUsers: [] };
-        res.json({ mutedUsers: settings.mutedUsers || [], followedUsers: settings.followedUsers || [] });
+        const settings = await UserSettings.findOne({ user }) || { mutedUsers: [], following: [] };
+        res.json({ mutedUsers: settings.mutedUsers, following: settings.following || [] });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/settings/follow', verifyToken, async (req, res) => {
     try {
         const { user, target, action, pattern } = req.body;
-        if (!user || !target || !action || !pattern) return res.status(400).json({ error: "Dados inválidos" });
+        console.log(`[POST /settings/follow] ${user} -> ${action} -> ${target}`);
 
+        if (!user || !target || !action || !pattern) return res.status(400).json({ error: "Dados inválidos" });
         if (req.authUser !== user) return res.status(403).json({ error: "Acesso negado" });
 
-        // 1. RE-VALIDATE PATTERN
+        // 1. SECURITY: PATTERN VALIDATION
         const hash = crypto.createHash('sha256').update(pattern).digest('hex');
         const auth = await PhoneAuth.findOne({ user });
 
         if (!auth || auth.patternHash !== hash) {
-            return res.status(403).json({ error: "Senha incorreta." });
+            console.log(`[Follow] Security Fail for ${user}`);
+            return res.status(403).json({ error: "Senha incorreta. Ação bloqueada." });
         }
 
         // 2. APPLY FOLLOW/UNFOLLOW
         let settings = await UserSettings.findOne({ user });
-        if (!settings) settings = await UserSettings.create({ user, mutedUsers: [], followedUsers: [] });
+        if (!settings) settings = await UserSettings.create({ user, mutedUsers: [], following: [] });
 
         if (action === 'follow') {
-            if (!settings.followedUsers.includes(target)) {
-                settings.followedUsers.push(target);
+            if (!settings.following) settings.following = []; // Safety check
+            if (!settings.following.includes(target)) {
+                settings.following.push(target);
+                await settings.save();
             }
         } else if (action === 'unfollow') {
-            settings.followedUsers = settings.followedUsers.filter(u => u !== target);
+            if (settings.following) {
+                settings.following = settings.following.filter(u => u !== target);
+                await settings.save();
+            }
         }
-        await settings.save();
 
-        res.json({ success: true, followedUsers: settings.followedUsers });
+        res.json({ success: true, following: settings.following });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
