@@ -751,6 +751,8 @@ app.post('/posts', verifyToken, async (req, res) => {
 
         // --- SECURITY: PATTERN VALIDATION ---
         const { pattern } = req.body;
+        console.log(`[POST /posts] User: ${user}`);
+        console.log(`[POST /posts] Pattern: '${pattern}'`);
         if (!pattern) return res.status(403).json({ error: "Senha não fornecida. Bloqueie e desbloqueie o celular." });
 
         const hash = crypto.createHash('sha256').update(pattern).digest('hex');
