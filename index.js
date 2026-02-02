@@ -149,7 +149,8 @@ const Group = mongoose.model('Group', new mongoose.Schema({
 
 const UserSettings = mongoose.model('UserSettings', new mongoose.Schema({
     user: { type: String, unique: true },
-    mutedUsers: { type: [String], default: [] }
+    mutedUsers: { type: [String], default: [] },
+    followedUsers: { type: [String], default: [] }
 }));
 
 // ... (skipping unchanged lines) ...
@@ -440,8 +441,40 @@ app.get('/settings/:user', verifyToken, async (req, res) => {
         // Verify identity
         if (req.authUser !== user) return res.status(403).json({ error: "Acesso negado" });
 
-        const settings = await UserSettings.findOne({ user }) || { mutedUsers: [] };
-        res.json({ mutedUsers: settings.mutedUsers });
+        const settings = await UserSettings.findOne({ user }) || { mutedUsers: [], followedUsers: [] };
+        res.json({ mutedUsers: settings.mutedUsers || [], followedUsers: settings.followedUsers || [] });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/settings/follow', verifyToken, async (req, res) => {
+    try {
+        const { user, target, action, pattern } = req.body;
+        if (!user || !target || !action || !pattern) return res.status(400).json({ error: "Dados inválidos" });
+
+        if (req.authUser !== user) return res.status(403).json({ error: "Acesso negado" });
+
+        // 1. RE-VALIDATE PATTERN
+        const hash = crypto.createHash('sha256').update(pattern).digest('hex');
+        const auth = await PhoneAuth.findOne({ user });
+
+        if (!auth || auth.patternHash !== hash) {
+            return res.status(403).json({ error: "Senha incorreta." });
+        }
+
+        // 2. APPLY FOLLOW/UNFOLLOW
+        let settings = await UserSettings.findOne({ user });
+        if (!settings) settings = await UserSettings.create({ user, mutedUsers: [], followedUsers: [] });
+
+        if (action === 'follow') {
+            if (!settings.followedUsers.includes(target)) {
+                settings.followedUsers.push(target);
+            }
+        } else if (action === 'unfollow') {
+            settings.followedUsers = settings.followedUsers.filter(u => u !== target);
+        }
+        await settings.save();
+
+        res.json({ success: true, followedUsers: settings.followedUsers });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
