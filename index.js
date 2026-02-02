@@ -728,7 +728,8 @@ app.get('/posts', async (req, res) => {
 // === ROTA DE POSTAGEM (PROTEGIDA POR TOKEN) ===
 app.post('/posts', verifyToken, async (req, res) => {
     try {
-        const { user, url, caption } = req.body;
+        let { user, url, caption } = req.body;
+        if (!user) user = req.authUser; // Fallback to token user (Reliable)
 
         // Middleware verifyToken já checou Impersonation (body.user vs token.user)
         // e já checou se user existe na sessão.
