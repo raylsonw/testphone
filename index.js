@@ -441,8 +441,39 @@ app.get('/settings/:user', verifyToken, async (req, res) => {
         // Verify identity
         if (req.authUser !== user) return res.status(403).json({ error: "Acesso negado" });
 
-        const settings = await UserSettings.findOne({ user }) || { mutedUsers: [] };
-        res.json({ mutedUsers: settings.mutedUsers });
+        const settings = await UserSettings.findOne({ user }) || { mutedUsers: [], following: [] };
+        res.json({ mutedUsers: settings.mutedUsers || [], following: settings.following || [] });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/settings/follow', verifyToken, async (req, res) => {
+    try {
+        const { user, target, action, pattern } = req.body;
+        if (!user || !target || !action || !pattern) return res.status(400).json({ error: "Dados inválidos" });
+
+        if (req.authUser !== user) return res.status(403).json({ error: "Acesso negado" });
+
+        // PATTERN VALIDATION
+        const hash = crypto.createHash('sha256').update(pattern).digest('hex');
+        const auth = await PhoneAuth.findOne({ user });
+        if (!auth || auth.patternHash !== hash) return res.status(403).json({ error: "Senha incorreta" });
+
+        let settings = await UserSettings.findOne({ user });
+        if (!settings) settings = await UserSettings.create({ user, mutedUsers: [], following: [] });
+
+        if (!settings.following) settings.following = [];
+
+        if (action === 'follow') {
+            if (!settings.following.includes(target)) {
+                settings.following.push(target);
+                await settings.save();
+            }
+        } else if (action === 'unfollow') {
+            settings.following = settings.following.filter(u => u !== target);
+            await settings.save();
+        }
+
+        res.json({ success: true, following: settings.following });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
