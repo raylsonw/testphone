@@ -147,6 +147,11 @@ const Group = mongoose.model('Group', new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 }));
 
+const UserSettings = mongoose.model('UserSettings', new mongoose.Schema({
+    user: { type: String, unique: true },
+    mutedUsers: { type: [String], default: [] }
+}));
+
 // ... (skipping unchanged lines) ...
 
 app.get('/admin/officials', async (req, res) => {
@@ -429,6 +434,50 @@ const PhoneAuth = mongoose.model('PhoneAuth', new mongoose.Schema({
 
 
 // NOVA ROTA DE AUTH (PATTERN LOCK) - UPDATED TO USE PhoneAuth
+app.get('/settings/:user', verifyToken, async (req, res) => {
+    try {
+        const { user } = req.params;
+        // Verify identity
+        if (req.authUser !== user) return res.status(403).json({ error: "Acesso negado" });
+
+        const settings = await UserSettings.findOne({ user }) || { mutedUsers: [] };
+        res.json({ mutedUsers: settings.mutedUsers });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/settings/mute', verifyToken, async (req, res) => {
+    try {
+        const { user, target, action, pattern } = req.body;
+        if (!user || !target || !action || !pattern) return res.status(400).json({ error: "Dados inválidos" });
+
+        if (req.authUser !== user) return res.status(403).json({ error: "Acesso negado" });
+
+        // 1. RE-VALIDATE PATTERN (Security Requirement)
+        const hash = crypto.createHash('sha256').update(pattern).digest('hex');
+        const auth = await PhoneAuth.findOne({ user });
+
+        if (!auth || auth.patternHash !== hash) {
+            return res.status(403).json({ error: "Senha incorreta. Ação bloqueada." });
+        }
+
+        // 2. APPLY MUTE/UNMUTE
+        let settings = await UserSettings.findOne({ user });
+        if (!settings) settings = await UserSettings.create({ user, mutedUsers: [] });
+
+        if (action === 'mute') {
+            if (!settings.mutedUsers.includes(target)) {
+                settings.mutedUsers.push(target);
+                await settings.save();
+            }
+        } else if (action === 'unmute') {
+            settings.mutedUsers = settings.mutedUsers.filter(u => u !== target);
+            await settings.save();
+        }
+
+        res.json({ success: true, mutedUsers: settings.mutedUsers });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/auth/login', async (req, res) => {
     try {
         const { user, pattern } = req.body;
@@ -698,6 +747,18 @@ app.post('/posts', verifyToken, async (req, res) => {
         if (recentPosts >= 2) {
             return res.status(429).json({ error: "Muitas postagens! Aguarde um minuto." });
         }
+
+        // --- SECURITY: PATTERN VALIDATION ---
+        const { pattern } = req.body;
+        if (!pattern) return res.status(403).json({ error: "Senha não fornecida. Bloqueie e desbloqueie o celular." });
+
+        const hash = crypto.createHash('sha256').update(pattern).digest('hex');
+        const auth = await PhoneAuth.findOne({ user });
+
+        if (!auth || auth.patternHash !== hash) {
+            return res.status(403).json({ error: "Senha incorreta. Ação bloqueada." });
+        }
+        // ------------------------------------
 
         if (!url) return res.status(400).json({ error: "Dados incompletos" });
 
