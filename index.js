@@ -126,7 +126,7 @@ mongoose.connection.once('open', loadSystemConfig);
 
 function checkRayoLifeStatus(req, res, next) {
     // Admin bypass (optional, using secret header)
-    if (req.headers['x-admin-secret'] === ADMIN_SECRET) return next();
+    if (req.headers['x-admin-secret'] === ADMIN_SECRET || req.headers['x-admin-secret'] === KEYS.rayolife) return next();
 
     if (!SYSTEM_STATUS.rayolife) {
         return res.status(503).json({ error: "RayoLife está em manutenção no momento. Volte em breve! 🚧" });
@@ -1065,7 +1065,7 @@ app.get('/system/status', (req, res) => {
 
 app.post('/admin/system/toggle', async (req, res) => {
     // Basic Admin Secret Check (Header must match env var)
-    if (req.headers['x-admin-secret'] !== ADMIN_SECRET) return res.status(403).json({ error: "Access Denied" });
+    if (req.headers['x-admin-secret'] !== ADMIN_SECRET && req.headers['x-admin-secret'] !== KEYS.rayolife) return res.status(403).json({ error: "Access Denied" });
     const { app, active } = req.body;
     if (app === 'rayolife') {
         SYSTEM_STATUS.rayolife = active;
