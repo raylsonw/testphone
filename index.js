@@ -105,7 +105,7 @@ const SystemConfig = mongoose.model('SystemConfig', new mongoose.Schema({
     value: { type: mongoose.Schema.Types.Mixed }
 }));
 
-const MIN_CLIENT_VERSION = '2.6.8'; // Deve corresponder ao manifest.json
+const MIN_CLIENT_VERSION = '2.7.0'; // Deve corresponder ao manifest.json
 const DOWNLOAD_URL = "https://chromewebstore.google.com/detail/rayophone-pro/afckimmlpgohdjilceiecmgfijckhbij"; // URL de download/suporte
 
 // IN-MEMORY STATE (Sync with DB on init)
