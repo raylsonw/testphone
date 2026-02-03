@@ -105,6 +105,9 @@ const SystemConfig = mongoose.model('SystemConfig', new mongoose.Schema({
     value: { type: mongoose.Schema.Types.Mixed }
 }));
 
+const MIN_CLIENT_VERSION = '2.6.8'; // Deve corresponder ao manifest.json
+const DOWNLOAD_URL = "https://chromewebstore.google.com/detail/rayophone-pro/afckimmlpgohdjilceiecmgfijckhbij"; // URL de download/suporte
+
 // IN-MEMORY STATE (Sync with DB on init)
 let SYSTEM_STATUS = { rayolife: true };
 
@@ -1061,6 +1064,15 @@ app.get('/admin/sorteio/participants', (req, res) => {
 // --- SYSTEM ADMIN ---
 app.get('/system/status', (req, res) => {
     res.json(SYSTEM_STATUS);
+});
+
+app.get('/system/version', (req, res) => {
+    res.json({
+        minVersion: MIN_CLIENT_VERSION,
+        currentVersion: MIN_CLIENT_VERSION,
+        url: DOWNLOAD_URL,
+        critical: true
+    });
 });
 
 app.post('/admin/system/toggle', async (req, res) => {
