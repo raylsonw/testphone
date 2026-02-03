@@ -98,6 +98,41 @@ const Profile = mongoose.model('Profile', new mongoose.Schema({
     priority: { type: Number, default: 0 }, // 0=Normal, 1=High (Top & Undelteable)
     createdAt: { type: Date, default: Date.now }
 }));
+
+// CONFIG GLOBAL
+const SystemConfig = mongoose.model('SystemConfig', new mongoose.Schema({
+    key: { type: String, unique: true },
+    value: { type: mongoose.Schema.Types.Mixed }
+}));
+
+// IN-MEMORY STATE (Sync with DB on init)
+let SYSTEM_STATUS = { rayolife: true };
+
+// Sync Function
+async function loadSystemConfig() {
+    try {
+        const conf = await SystemConfig.findOne({ key: 'rayolife_status' });
+        if (conf && conf.value) SYSTEM_STATUS.rayolife = conf.value.active;
+        else {
+            // Default Create
+            await SystemConfig.create({ key: 'rayolife_status', value: { active: true } });
+            SYSTEM_STATUS.rayolife = true;
+        }
+        console.log("⚙️ SYSTEM STATUS LOADED:", SYSTEM_STATUS);
+    } catch (e) { console.error("Error loading config:", e); }
+}
+mongoose.connection.once('open', loadSystemConfig);
+
+
+function checkRayoLifeStatus(req, res, next) {
+    // Admin bypass (optional, using secret header)
+    if (req.headers['x-admin-secret'] === ADMIN_SECRET) return next();
+
+    if (!SYSTEM_STATUS.rayolife) {
+        return res.status(503).json({ error: "RayoLife está em manutenção no momento. Volte em breve! 🚧" });
+    }
+    next();
+}
 const Template = mongoose.model('Template', new mongoose.Schema({ id: String, profileId: String, title: String, text: String, image: String, link: String }));
 const ScheduledMessage = mongoose.model('ScheduledMessage', new mongoose.Schema({ id: { type: String, unique: true }, creatorId: String, timestamp: Number, payload: Object, status: { type: String, default: 'pending' } }));
 const GlobalMessage = mongoose.model('GlobalMessage', new mongoose.Schema({ id: { type: String, unique: true }, senderName: String, senderAvatar: String, messageText: String, bodyImage: String, bodyLink: String, createdAt: { type: Date, default: Date.now } }));
@@ -743,7 +778,7 @@ app.post('/admin/global-message', async (req, res) => {
 app.get('/global-messages', async (req, res) => { const m = await GlobalMessage.find().sort({ createdAt: -1 }).limit(20); res.json(m); });
 
 // --- RAYOLIFE ROUTES ---
-app.get('/posts', async (req, res) => {
+app.get('/posts', checkRayoLifeStatus, async (req, res) => {
     const { q } = req.query;
     let query = { status: 'active' };
 
@@ -758,7 +793,7 @@ app.get('/posts', async (req, res) => {
 
 // === ROTA DE POSTAGEM (AGORA COM PROTEÇÃO DE BAN) ===
 // === ROTA DE POSTAGEM (PROTEGIDA POR TOKEN) ===
-app.post('/posts', verifyToken, async (req, res) => {
+app.post('/posts', verifyToken, checkRayoLifeStatus, async (req, res) => {
     try {
         let { user, url, caption } = req.body;
         if (!user) user = req.authUser; // Fallback to token user (Reliable)
@@ -1022,4 +1057,30 @@ app.get('/admin/sorteio/participants', (req, res) => {
     res.json({ list: list });
 });
 
-app.listen(PORT, () => console.log(`🔥 Server v28 (Ban Guard) rodando na porta ${PORT}`));
+
+// --- SYSTEM ADMIN ---
+app.get('/system/status', (req, res) => {
+    res.json(SYSTEM_STATUS);
+});
+
+app.post('/admin/system/toggle', async (req, res) => {
+    // Basic Admin Secret Check (Header must match env var)
+    if (req.headers['x-admin-secret'] !== ADMIN_SECRET) return res.status(403).json({ error: "Access Denied" });
+    const { app, active } = req.body;
+    if (app === 'rayolife') {
+        SYSTEM_STATUS.rayolife = active;
+        // Upsert Config
+        try {
+            await SystemConfig.findOneAndUpdate(
+                { key: 'rayolife_status' },
+                { key: 'rayolife_status', value: { active } },
+                { upsert: true, new: true }
+            );
+            console.log(`[SYSTEM] RayoLife Active: ${active}`);
+            return res.json({ success: true, status: SYSTEM_STATUS });
+        } catch (e) { return res.status(500).json({ error: e.message }); }
+    }
+    res.status(400).json({ error: "Unknown app" });
+});
+
+app.listen(PORT, () => console.log(`🔥 Server v29 (System Lock) rodando na porta ${PORT}`));
